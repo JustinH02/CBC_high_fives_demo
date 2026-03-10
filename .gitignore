@@ -1,0 +1,4 @@
+node_modules/
+children.db
+public/uploads/*
+!public/uploads/.gitkeep
