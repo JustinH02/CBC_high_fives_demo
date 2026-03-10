@@ -15,7 +15,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 32px 24px;
+      padding: 16px;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     header {
@@ -43,6 +45,14 @@
       color: #fff;
       font-size: .95rem;
     }
+    .filter-bar select {
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1.5px solid #555;
+      background: #16213e;
+      color: #fff;
+      font-size: .95rem;
+    }
     .filter-bar button {
       padding: 9px 18px;
       border-radius: 8px;
@@ -60,7 +70,10 @@
     #slideshow-wrapper {
       position: relative;
       width: 100%;
-      max-width: 640px;
+      max-width: 960px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     /* Individual slide */
@@ -77,8 +90,8 @@
     }
 
     .slide-photo {
-      width: 320px;
-      height: 320px;
+      width: min(72vw, 320px);
+      height: min(72vw, 320px);
       object-fit: cover;
       border-radius: 50%;
       border: 6px solid #43a047;
@@ -88,8 +101,8 @@
     }
 
     .slide-photo-placeholder {
-      width: 320px;
-      height: 320px;
+      width: min(72vw, 320px);
+      height: min(72vw, 320px);
       border-radius: 50%;
       border: 6px solid #43a047;
       margin: 0 auto 24px;
@@ -115,6 +128,21 @@
       font-size: .88rem;
       color: #888;
       margin-top: 8px;
+    }
+    .slide-email {
+      font-size: .88rem;
+      color: #b9c9ff;
+      margin-top: 8px;
+      word-break: break-word;
+    }
+    .slide-message {
+      font-size: .9rem;
+      color: #d6def7;
+      margin-top: 6px;
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.4;
     }
 
     /* Controls */
@@ -191,6 +219,99 @@
       font-size: .9rem;
     }
     .back-link:hover { text-decoration: underline; }
+
+    /* Fullscreen image viewer */
+    #lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 16, .96);
+      z-index: 1000;
+      display: none;
+      padding: 16px;
+    }
+    #lightbox.open { display: grid; grid-template-rows: auto 1fr auto auto; gap: 14px; }
+
+    .lightbox-top,
+    .lightbox-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .lightbox-btn {
+      border: 1px solid #4d5b8c;
+      background: #111832;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: .9rem;
+      line-height: 1;
+    }
+    .lightbox-btn:hover { background: #1b2650; }
+    .lightbox-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    #lightbox-counter {
+      min-width: 72px;
+      text-align: center;
+      color: #b7c4ec;
+      font-size: .88rem;
+    }
+
+    #lightbox-viewport {
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid #263459;
+      background: #090d1f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      user-select: none;
+    }
+
+    #lightbox-image {
+      max-width: 100%;
+      max-height: 100%;
+      transform-origin: center center;
+      cursor: grab;
+      will-change: transform;
+      display: none;
+    }
+    #lightbox-image.panning { cursor: grabbing; }
+
+    #lightbox-placeholder {
+      display: none;
+      font-size: min(22vw, 160px);
+      opacity: .88;
+    }
+
+    .lightbox-meta {
+      background: rgba(18, 27, 54, .88);
+      border: 1px solid #314577;
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    #lbName { font-size: 1.25rem; font-weight: 700; }
+    #lbAge { color: #b9f0bf; }
+    #lbTown { color: #d8ddf0; }
+    #lbBirthdate { color: #aeb6d1; font-size: .9rem; }
+
+    body.lightbox-open {
+      overflow: hidden;
+    }
+
+    @media (max-width: 700px) {
+      #lightbox { padding: 10px; }
+      .lightbox-btn { padding: 8px 10px; }
+    }
   </style>
 </head>
 <body>
@@ -200,8 +321,25 @@
   </header>
 
   <div class="filter-bar">
-    <label for="dateFilter">Filter by birthdate:</label>
-    <input type="date" id="dateFilter" />
+    <label for="monthFilter">Filter by birthday:</label>
+    <select id="monthFilter" aria-label="Birthday month">
+      <option value="">Month</option>
+      <option value="01">Jan</option>
+      <option value="02">Feb</option>
+      <option value="03">Mar</option>
+      <option value="04">Apr</option>
+      <option value="05">May</option>
+      <option value="06">Jun</option>
+      <option value="07">Jul</option>
+      <option value="08">Aug</option>
+      <option value="09">Sep</option>
+      <option value="10">Oct</option>
+      <option value="11">Nov</option>
+      <option value="12">Dec</option>
+    </select>
+    <select id="dayFilter" aria-label="Birthday day">
+      <option value="">Day</option>
+    </select>
     <button id="btnFilter">Show</button>
     <button id="btnClear">Clear</button>
   </div>
@@ -226,10 +364,61 @@
 
   <a class="back-link" href="/">← Back to submission form</a>
 
+  <div id="lightbox" aria-hidden="true">
+    <div class="lightbox-top">
+      <button id="lbClose" class="lightbox-btn" type="button" title="Close (Esc)">Close</button>
+      <span id="lightbox-counter"></span>
+      <button id="lbPrev" class="lightbox-btn" type="button" title="Previous (Left Arrow)">←</button>
+      <button id="lbNext" class="lightbox-btn" type="button" title="Next (Right Arrow)">→</button>
+    </div>
+
+    <div id="lightbox-viewport">
+      <img id="lightbox-image" alt="" draggable="false" />
+      <div id="lightbox-placeholder">👦</div>
+    </div>
+
+    <div class="lightbox-meta" aria-live="polite">
+      <div id="lbName"></div>
+      <div id="lbAge"></div>
+      <div id="lbTown"></div>
+      <div id="lbBirthdate"></div>
+    </div>
+
+    <div class="lightbox-bottom">
+      <button id="lbZoomOut" class="lightbox-btn" type="button" title="Zoom out">−</button>
+      <button id="lbZoomReset" class="lightbox-btn" type="button" title="Reset zoom">100%</button>
+      <button id="lbZoomIn" class="lightbox-btn" type="button" title="Zoom in">+</button>
+    </div>
+  </div>
+
   <script>
     let slides = [];
+    let slideData = [];
     let current = 0;
     let autoTimer = null;
+
+    const lightbox = {
+      open: false,
+      scale: 1,
+      minScale: 1,
+      maxScale: 4,
+      tx: 0,
+      ty: 0,
+      panning: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      baseX: 0,
+      baseY: 0
+    };
+
+    const lbRoot = document.getElementById('lightbox');
+    const lbImage = document.getElementById('lightbox-image');
+    const lbPlaceholder = document.getElementById('lightbox-placeholder');
+    const lbCounter = document.getElementById('lightbox-counter');
+    const lbViewport = document.getElementById('lightbox-viewport');
+    const monthFilter = document.getElementById('monthFilter');
+    const dayFilter = document.getElementById('dayFilter');
 
     async function loadSlides(date) {
       const url = date ? `/children?date=${encodeURIComponent(date)}` : '/children';
@@ -246,6 +435,7 @@
       container.innerHTML = '';
       dots.innerHTML = '';
       slides = [];
+      slideData = children;
 
       if (!children.length) {
         noResults.style.display = 'block';
@@ -263,7 +453,7 @@
 
         const safeSrc = child.photo ? encodeURI(child.photo).replace(/['"<>]/g, '') : null;
         const photoEl = safeSrc
-          ? `<img class="slide-photo" src="${safeSrc}" alt="Photo of ${escapeHtml(child.child_name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="slide-photo-placeholder" style="display:none">👦</div>`
+          ? `<img class="slide-photo" src="${safeSrc}" alt="Photo of ${escapeHtml(child.child_name)}" onerror="this.dataset.failed='1';this.style.display='none';this.nextElementSibling.style.display='flex'" /><div class="slide-photo-placeholder" style="display:none">👦</div>`
           : `<div class="slide-photo-placeholder">👦</div>`;
 
         slide.innerHTML = `
@@ -272,7 +462,14 @@
           <div class="slide-age">Age ${child.age}</div>
           <div class="slide-town">📍 ${escapeHtml(child.town)}</div>
           <div class="slide-bday">🎂 ${formatDate(child.birthdate)}</div>
+          <div class="slide-email">Parent Email: ${escapeHtml(child.parent_email || 'Unavailable')}</div>
+          <div class="slide-message">Message: ${escapeHtml(child.high_five_message || 'No message')}</div>
         `;
+
+        slide.querySelector('.slide-photo')?.addEventListener('click', () => openLightbox(idx));
+        slide.querySelector('.slide-photo-placeholder')?.addEventListener('click', () => openLightbox(idx));
+        slide.querySelector('.slide-photo')?.setAttribute('title', 'Click to zoom');
+        slide.querySelector('.slide-photo-placeholder')?.setAttribute('title', 'Open fullscreen view');
 
         container.appendChild(slide);
         slides.push(slide);
@@ -286,6 +483,115 @@
       current = 0;
       updateCounter();
       updateButtons();
+    }
+
+    function getSlideMedia(idx) {
+      const slide = slides[idx];
+      if (!slide) return { hasImage: false };
+
+      const img = slide.querySelector('.slide-photo');
+      if (img && img.getAttribute('src') && !img.dataset.failed) {
+        return {
+          hasImage: true,
+          src: img.getAttribute('src'),
+          alt: img.getAttribute('alt') || 'Slide image'
+        };
+      }
+
+      return { hasImage: false };
+    }
+
+    function resetLightboxTransform() {
+      lightbox.scale = 1;
+      lightbox.tx = 0;
+      lightbox.ty = 0;
+      applyLightboxTransform();
+    }
+
+    function applyLightboxTransform() {
+      lbImage.style.transform = `translate(${lightbox.tx}px, ${lightbox.ty}px) scale(${lightbox.scale})`;
+      document.getElementById('lbZoomReset').textContent = `${Math.round(lightbox.scale * 100)}%`;
+      const disableZoom = lbImage.style.display === 'none';
+      document.getElementById('lbZoomIn').disabled = disableZoom || lightbox.scale >= lightbox.maxScale;
+      document.getElementById('lbZoomOut').disabled = disableZoom || lightbox.scale <= lightbox.minScale;
+      document.getElementById('lbZoomReset').disabled = disableZoom;
+    }
+
+    function setLightboxScale(nextScale) {
+      lightbox.scale = Math.min(lightbox.maxScale, Math.max(lightbox.minScale, nextScale));
+      if (lightbox.scale === 1) {
+        lightbox.tx = 0;
+        lightbox.ty = 0;
+      }
+      applyLightboxTransform();
+    }
+
+    async function requestBrowserFullscreen() {
+      if (document.fullscreenElement || typeof document.documentElement.requestFullscreen !== 'function') return;
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch (_err) {
+        // Fullscreen can fail without a user gesture on some browsers.
+      }
+    }
+
+    function refreshLightbox() {
+      const media = getSlideMedia(current);
+      const child = slideData[current] || {};
+      lbCounter.textContent = `${current + 1} / ${slides.length}`;
+      document.getElementById('lbPrev').disabled = current === 0;
+      document.getElementById('lbNext').disabled = current === slides.length - 1;
+      document.getElementById('lbName').textContent = child.child_name || 'Unknown Child';
+      document.getElementById('lbAge').textContent = Number.isFinite(Number(child.age)) ? `Age ${child.age}` : 'Age unknown';
+      document.getElementById('lbTown').textContent = child.town ? `Location: ${child.town}` : 'Location unavailable';
+      document.getElementById('lbBirthdate').textContent = child.birthdate ? `Birthdate: ${formatDate(child.birthdate)}` : 'Birthdate unavailable';
+
+      if (media.hasImage) {
+        lbImage.src = media.src;
+        lbImage.alt = media.alt;
+        lbImage.style.display = 'block';
+        lbPlaceholder.style.display = 'none';
+      } else {
+        lbImage.removeAttribute('src');
+        lbImage.style.display = 'none';
+        lbPlaceholder.style.display = 'block';
+      }
+
+      resetLightboxTransform();
+    }
+
+    function openLightbox(idx = current) {
+      if (!slides.length) return;
+      goTo(idx);
+      requestBrowserFullscreen();
+      lightbox.open = true;
+      lbRoot.classList.add('open');
+      lbRoot.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('lightbox-open');
+      refreshLightbox();
+    }
+
+    function closeLightbox() {
+      lightbox.open = false;
+      lbRoot.classList.remove('open');
+      lbRoot.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('lightbox-open');
+      lightbox.panning = false;
+      lbImage.classList.remove('panning');
+    }
+
+    function lightboxPrev() {
+      if (current > 0) {
+        goTo(current - 1);
+        refreshLightbox();
+      }
+    }
+
+    function lightboxNext() {
+      if (current < slides.length - 1) {
+        goTo(current + 1);
+        refreshLightbox();
+      }
     }
 
     function goTo(idx) {
@@ -321,12 +627,119 @@
       return `${months[parseInt(m,10)-1]} ${parseInt(d,10)}, ${y}`;
     }
 
+    function getDaysInMonth(month) {
+      if (!month) return 31;
+      const monthNum = parseInt(month, 10);
+      if ([4, 6, 9, 11].includes(monthNum)) return 30;
+      if (monthNum === 2) return 29;
+      return 31;
+    }
+
+    function populateDayOptions(month) {
+      const keep = dayFilter.value;
+      const maxDay = getDaysInMonth(month);
+      dayFilter.innerHTML = '<option value="">Day</option>';
+      for (let d = 1; d <= maxDay; d += 1) {
+        const value = String(d).padStart(2, '0');
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = value;
+        dayFilter.appendChild(option);
+      }
+      if (keep && parseInt(keep, 10) <= maxDay) {
+        dayFilter.value = keep;
+      }
+    }
+
+    monthFilter.addEventListener('change', () => {
+      populateDayOptions(monthFilter.value);
+    });
+
     // Controls
     document.getElementById('btnPrev').addEventListener('click', () => {
       if (current > 0) goTo(current - 1);
     });
     document.getElementById('btnNext').addEventListener('click', () => {
       if (current < slides.length - 1) goTo(current + 1);
+    });
+
+    // Fullscreen viewer controls
+    document.getElementById('lbClose').addEventListener('click', closeLightbox);
+    document.getElementById('lbPrev').addEventListener('click', lightboxPrev);
+    document.getElementById('lbNext').addEventListener('click', lightboxNext);
+    document.getElementById('lbZoomIn').addEventListener('click', () => setLightboxScale(lightbox.scale + 0.25));
+    document.getElementById('lbZoomOut').addEventListener('click', () => setLightboxScale(lightbox.scale - 0.25));
+    document.getElementById('lbZoomReset').addEventListener('click', () => setLightboxScale(1));
+
+    lbRoot.addEventListener('click', (event) => {
+      if (event.target === lbRoot) closeLightbox();
+    });
+
+    lbViewport.addEventListener('wheel', (event) => {
+      if (!lightbox.open || lbImage.style.display === 'none') return;
+      event.preventDefault();
+      const delta = event.deltaY < 0 ? 0.2 : -0.2;
+      setLightboxScale(lightbox.scale + delta);
+    }, { passive: false });
+
+    lbImage.addEventListener('dblclick', () => {
+      if (lbImage.style.display === 'none') return;
+      setLightboxScale(lightbox.scale === 1 ? 2 : 1);
+    });
+
+    lbViewport.addEventListener('pointerdown', (event) => {
+      if (!lightbox.open || lightbox.scale <= 1 || lbImage.style.display === 'none') return;
+      lightbox.panning = true;
+      lightbox.pointerId = event.pointerId;
+      lightbox.startX = event.clientX;
+      lightbox.startY = event.clientY;
+      lightbox.baseX = lightbox.tx;
+      lightbox.baseY = lightbox.ty;
+      lbImage.classList.add('panning');
+      lbViewport.setPointerCapture(event.pointerId);
+    });
+
+    lbViewport.addEventListener('pointermove', (event) => {
+      if (!lightbox.panning || event.pointerId !== lightbox.pointerId) return;
+      lightbox.tx = lightbox.baseX + (event.clientX - lightbox.startX);
+      lightbox.ty = lightbox.baseY + (event.clientY - lightbox.startY);
+      applyLightboxTransform();
+    });
+
+    lbViewport.addEventListener('pointerup', (event) => {
+      if (event.pointerId !== lightbox.pointerId) return;
+      lightbox.panning = false;
+      lbImage.classList.remove('panning');
+      lbViewport.releasePointerCapture(event.pointerId);
+    });
+
+    lbViewport.addEventListener('pointercancel', (event) => {
+      if (event.pointerId !== lightbox.pointerId) return;
+      lightbox.panning = false;
+      lbImage.classList.remove('panning');
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName)) return;
+
+      if (event.code === 'Space') {
+        event.preventDefault();
+        if (!slides.length) return;
+        if (current < slides.length - 1) {
+          goTo(current + 1);
+          if (lightbox.open) refreshLightbox();
+        }
+        return;
+      }
+
+      if (!lightbox.open) return;
+
+      if (event.key === 'Escape') closeLightbox();
+      if (event.key === 'ArrowLeft') lightboxPrev();
+      if (event.key === 'ArrowRight') lightboxNext();
+      if (event.key === '+' || event.key === '=') setLightboxScale(lightbox.scale + 0.25);
+      if (event.key === '-') setLightboxScale(lightbox.scale - 0.25);
+      if (event.key === '0') setLightboxScale(1);
     });
 
     // Auto-play
@@ -344,19 +757,29 @@
 
     // Filter
     document.getElementById('btnFilter').addEventListener('click', async () => {
-      const date = document.getElementById('dateFilter').value;
-      const children = await loadSlides(date || null);
+      const month = monthFilter.value;
+      const day = dayFilter.value;
+      if (!month || !day) {
+        const children = await loadSlides(null);
+        buildSlides(children);
+        return;
+      }
+      const syntheticDate = `2000-${month}-${day}`;
+      const children = await loadSlides(syntheticDate);
       buildSlides(children);
     });
 
     document.getElementById('btnClear').addEventListener('click', async () => {
-      document.getElementById('dateFilter').value = '';
+      monthFilter.value = '';
+      populateDayOptions('');
+      dayFilter.value = '';
       const children = await loadSlides(null);
       buildSlides(children);
     });
 
     // Initial load
     (async () => {
+      populateDayOptions('');
       const children = await loadSlides(null);
       buildSlides(children);
     })();

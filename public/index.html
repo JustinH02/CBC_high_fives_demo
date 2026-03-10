@@ -21,10 +21,23 @@
       background: #fff;
       border-radius: 16px;
       box-shadow: 0 8px 32px rgba(0,0,0,.12);
-      max-width: 520px;
+      max-width: 620px;
       width: 100%;
       padding: 40px 36px 32px;
     }
+
+    .notice {
+      background: #f4fbf4;
+      border: 1px solid #c9e6cc;
+      color: #2f4d33;
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      font-size: .86rem;
+      line-height: 1.45;
+    }
+
+    .notice p + p { margin-top: 6px; }
 
     .logo {
       text-align: center;
@@ -45,13 +58,20 @@
     input[type="number"],
     input[type="email"],
     input[type="date"],
-    input[type="file"] {
+    input[type="file"],
+    textarea {
       width: 100%;
       padding: 10px 12px;
       border: 1.5px solid #ccc;
       border-radius: 8px;
       font-size: .95rem;
       transition: border-color .2s;
+      font-family: inherit;
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
     }
 
     input:focus { outline: none; border-color: #43a047; }
@@ -113,10 +133,17 @@
       <p>Register your child's birthday celebration</p>
     </div>
 
+    <section class="notice" aria-label="Submission guidance">
+      <p><strong>Photo quality and privacy:</strong> Please upload a clear, non-blurry image between 50 KB and 5 MB. Review all details before submitting.</p>
+      <p>By submitting, you confirm you are the parent/guardian and consent to use this photo and child details for the CBC High Fives slideshow.</p>
+      <p>Parent email and High Five message are collected for operations only and are not shown on the slideshow.</p>
+    </section>
+
     <form id="submitForm" enctype="multipart/form-data">
       <div class="field">
         <label for="child_name">Child's Name *</label>
-        <input type="text" id="child_name" name="child_name" placeholder="e.g. Emma Smith" required />
+        <input type="text" id="child_name" name="child_name" placeholder="e.g. Emma Smith" required pattern="[A-Z][a-zA-Z'-]*\s+[A-Z][a-zA-Z'-]*(\s+[A-Z][a-zA-Z'-]*)*" title="Use first and last name with capital initials (for example: Emma Smith)." />
+        <p class="hint">Use first and last name, both starting with a capital letter.</p>
       </div>
 
       <div class="field">
@@ -130,19 +157,37 @@
       </div>
 
       <div class="field">
+        <label for="submission_date">Submission Date (auto-set)</label>
+        <input type="date" id="submission_date" name="submission_date" readonly />
+        <p class="hint">Applications must be submitted at least 6 weeks before the child's birthdate.</p>
+        <p class="hint">Birth year must match the current year, unless the birthdate is within 6 weeks of next year.</p>
+      </div>
+
+      <div class="field">
         <label for="birthdate">Child's Birthdate *</label>
         <input type="date" id="birthdate" name="birthdate" required />
       </div>
 
       <div class="field">
         <label for="parent_email">Parent's Email *</label>
-        <input type="email" id="parent_email" name="parent_email" placeholder="parent@example.com" required />
+        <input type="email" id="parent_email" name="parent_email" placeholder="parent@example.com" required autocomplete="off" inputmode="email" />
+      </div>
+
+      <div class="field">
+        <label for="parent_email_confirm">Confirm Parent's Email *</label>
+        <input type="email" id="parent_email_confirm" name="parent_email_confirm" placeholder="Type email again" required autocomplete="off" inputmode="email" />
+      </div>
+
+      <div class="field">
+        <label for="high_five_message">High Five Message</label>
+        <textarea id="high_five_message" name="high_five_message" maxlength="500" placeholder="Optional message to production team."></textarea>
+        <p class="hint">Optional, up to 500 characters. This will not appear on the slideshow.</p>
       </div>
 
       <div class="field">
         <label for="photo">Child's Photo</label>
         <input type="file" id="photo" name="photo" accept="image/*" />
-        <p class="hint">Optional – JPEG, PNG, GIF, or WebP · max 5 MB</p>
+        <p class="hint">Optional – JPEG, PNG, GIF, or WebP · minimum 50 KB · maximum 5 MB</p>
         <img id="photo-preview" alt="Photo preview" />
       </div>
 
@@ -151,13 +196,63 @@
 
     <div id="status" role="alert"></div>
     <a class="nav-link" href="/slideshow">View Birthday Slideshow →</a>
+    <a class="nav-link" href="/admin">Admin Edit Portal →</a>
   </div>
 
   <script>
+    const PHOTO_MIN_BYTES = 50 * 1024;
+    const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+    function toTitleCase(value) {
+      return value
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+    }
+
+    function isSubmissionAtLeastSixWeeksBeforeBirth(submissionDate, birthdate) {
+      const submitted = new Date(`${submissionDate}T00:00:00Z`);
+      const birth = new Date(`${birthdate}T00:00:00Z`);
+      if (Number.isNaN(birth.getTime()) || Number.isNaN(submitted.getTime())) return false;
+      const sixWeeksMs = 6 * 7 * 24 * 60 * 60 * 1000;
+      return (birth.getTime() - submitted.getTime()) >= sixWeeksMs;
+    }
+
+    function isBirthYearAllowed(submissionDate, birthdate) {
+      const submitted = new Date(`${submissionDate}T00:00:00Z`);
+      const birth = new Date(`${birthdate}T00:00:00Z`);
+      if (Number.isNaN(submitted.getTime()) || Number.isNaN(birth.getTime())) return false;
+
+      const submittedYear = submitted.getUTCFullYear();
+      const birthYear = birth.getUTCFullYear();
+      if (birthYear === submittedYear) return true;
+
+      if (birthYear === submittedYear + 1) {
+        const nextYearStart = Date.UTC(submittedYear + 1, 0, 1);
+        const sixWeeksMs = 6 * 7 * 24 * 60 * 60 * 1000;
+        return (birth.getTime() - nextYearStart) <= sixWeeksMs;
+      }
+
+      return false;
+    }
+
+    function todayISO() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    document.getElementById('submission_date').value = todayISO();
+
     // Live photo preview
     let currentObjectUrl = null;
     document.getElementById('photo').addEventListener('change', function () {
       const preview = document.getElementById('photo-preview');
+      const status = document.getElementById('status');
       // Revoke the previous object URL to avoid memory leaks
       if (currentObjectUrl) {
         URL.revokeObjectURL(currentObjectUrl);
@@ -165,6 +260,15 @@
       }
       const file = this.files[0];
       if (file) {
+        if (file.size < PHOTO_MIN_BYTES || file.size > PHOTO_MAX_BYTES) {
+          this.value = '';
+          preview.style.display = 'none';
+          status.textContent = '❌ Photo must be between 50 KB and 5 MB.';
+          status.className = 'error';
+          status.style.display = 'block';
+          return;
+        }
+
         currentObjectUrl = URL.createObjectURL(file);
         preview.src = currentObjectUrl;
         preview.style.display = 'block';
@@ -179,6 +283,41 @@
       const status = document.getElementById('status');
       status.style.display = 'none';
 
+      const nameInput = document.getElementById('child_name');
+      const emailInput = document.getElementById('parent_email');
+      const emailConfirmInput = document.getElementById('parent_email_confirm');
+      const birthdateInput = document.getElementById('birthdate');
+      const submissionDateInput = document.getElementById('submission_date');
+      nameInput.value = toTitleCase(nameInput.value);
+
+      if (!nameInput.checkValidity()) {
+        status.textContent = '❌ Name must include first and last name with capital initials.';
+        status.className = 'error';
+        status.style.display = 'block';
+        return;
+      }
+
+      if (emailInput.value.trim() !== emailConfirmInput.value.trim()) {
+        status.textContent = '❌ Parent email and confirm email must match.';
+        status.className = 'error';
+        status.style.display = 'block';
+        return;
+      }
+
+      if (!isSubmissionAtLeastSixWeeksBeforeBirth(submissionDateInput.value, birthdateInput.value)) {
+        status.textContent = '❌ Application denied: submission date must be at least 6 weeks before the birthdate.';
+        status.className = 'error';
+        status.style.display = 'block';
+        return;
+      }
+
+      if (!isBirthYearAllowed(submissionDateInput.value, birthdateInput.value)) {
+        status.textContent = '❌ Birthdate year must match the current year, unless birthdate is within 6 weeks of next year.';
+        status.className = 'error';
+        status.style.display = 'block';
+        return;
+      }
+
       const formData = new FormData(this);
 
       try {
@@ -189,6 +328,7 @@
           status.textContent = '✅ Child registered successfully! Thank you.';
           status.className = 'success';
           this.reset();
+          document.getElementById('submission_date').value = todayISO();
           document.getElementById('photo-preview').style.display = 'none';
         } else {
           status.textContent = `❌ ${data.error || 'Submission failed. Please try again.'}`;

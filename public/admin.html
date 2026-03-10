@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CBC High Fives - Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f3f6fb;
+      color: #13213b;
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, .09);
+      padding: 16px;
+      margin: 0 auto 16px;
+      max-width: 1100px;
+    }
+    h1 { margin: 0 0 10px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    input, textarea, button {
+      border: 1px solid #b7c3df;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: .92rem;
+      font-family: inherit;
+    }
+    textarea { min-height: 70px; width: 100%; }
+    button {
+      background: #1d3f8f;
+      color: #fff;
+      cursor: pointer;
+      border: none;
+    }
+    button:hover { background: #173472; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .88rem;
+    }
+    th, td {
+      border-bottom: 1px solid #e5eaf6;
+      padding: 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    tr:hover { background: #f8faff; }
+    .hidden { display: none; }
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      display: none;
+      font-size: .9rem;
+    }
+    .status.ok { display: block; background: #e9f8eb; color: #23582d; }
+    .status.err { display: block; background: #feecec; color: #8c2222; }
+    .photo-thumb {
+      width: 58px;
+      height: 58px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #d8deef;
+      display: block;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .edit-actions { display: flex; gap: 10px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="loginCard">
+    <h1>Admin Login</h1>
+    <p>Use this page to correct entries when a photo or details need changes.</p>
+    <div class="row">
+      <input id="password" type="password" placeholder="Admin password" />
+      <button id="btnLogin" type="button">Login</button>
+    </div>
+    <div id="loginStatus" class="status"></div>
+  </div>
+
+  <div class="card hidden" id="adminCard">
+    <div class="row" style="justify-content: space-between;">
+      <h1 style="margin: 0;">Submission Editor</h1>
+      <div class="row">
+        <button id="btnRefresh" type="button">Refresh</button>
+        <button id="btnLogout" type="button">Logout</button>
+      </div>
+    </div>
+    <p>Edit a row below to fix misspellings, wrong date/town, or replace/remove a bad photo.</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Photo</th>
+          <th>Name</th>
+          <th>Age</th>
+          <th>Town</th>
+          <th>Birthdate</th>
+          <th>Email</th>
+          <th>Message</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="tableStatus" class="status"></div>
+  </div>
+
+  <div class="card hidden" id="editCard">
+    <h1>Edit Child Entry</h1>
+    <form id="editForm" enctype="multipart/form-data">
+      <input type="hidden" id="editId" />
+      <div class="grid">
+        <label>Name
+          <input id="editName" name="child_name" required pattern="[A-Z][a-zA-Z'-]*\s+[A-Z][a-zA-Z'-]*(\s+[A-Z][a-zA-Z'-]*)*" />
+        </label>
+        <label>Age
+          <input id="editAge" name="age" type="number" min="0" max="18" required />
+        </label>
+        <label>Town / City
+          <input id="editTown" name="town" required />
+        </label>
+        <label>Birthdate
+          <input id="editBirthdate" name="birthdate" type="date" required />
+        </label>
+        <label>Parent Email
+          <input id="editEmail" name="parent_email" type="email" required />
+        </label>
+        <label>Replace Photo
+          <input id="editPhoto" name="photo" type="file" accept="image/*" />
+        </label>
+      </div>
+      <label style="display:block; margin-top: 10px;">High Five Message (internal only)
+        <textarea id="editMessage" name="high_five_message" maxlength="500"></textarea>
+      </label>
+      <label style="display:block; margin-top: 10px;">
+        <input id="editRemovePhoto" name="remove_photo" type="checkbox" /> Remove existing photo
+      </label>
+      <div class="edit-actions">
+        <button type="submit">Save Changes</button>
+        <button id="btnCancelEdit" type="button">Cancel</button>
+      </div>
+    </form>
+    <div id="editStatus" class="status"></div>
+  </div>
+
+  <script>
+    const PHOTO_MIN_BYTES = 50 * 1024;
+    const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+    function showStatus(id, message, ok) {
+      const el = document.getElementById(id);
+      el.textContent = message;
+      el.className = `status ${ok ? 'ok' : 'err'}`;
+    }
+
+    function clearStatus(id) {
+      const el = document.getElementById(id);
+      el.textContent = '';
+      el.className = 'status';
+    }
+
+    async function login() {
+      clearStatus('loginStatus');
+      const password = document.getElementById('password').value;
+      const res = await fetch('/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showStatus('loginStatus', `Login failed: ${data.error || 'Unknown error'}`, false);
+        return;
+      }
+      document.getElementById('loginCard').classList.add('hidden');
+      document.getElementById('adminCard').classList.remove('hidden');
+      try {
+        await loadRows();
+      } catch (_err) {
+        showStatus('loginStatus', 'Login succeeded but rows could not be loaded.', false);
+      }
+    }
+
+    async function logout() {
+      await fetch('/admin/logout', { method: 'POST' });
+      location.reload();
+    }
+
+    function renderRows(rows) {
+      const tbody = document.getElementById('rows');
+      tbody.innerHTML = '';
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.id}</td>
+          <td>${row.photo ? `<img class="photo-thumb" src="${row.photo}" alt="child photo" />` : '-'}</td>
+          <td>${row.child_name}</td>
+          <td>${row.age}</td>
+          <td>${row.town}</td>
+          <td>${row.birthdate || '-'}</td>
+          <td>${row.parent_email}</td>
+          <td>${row.high_five_message || '-'}</td>
+          <td><button type="button" data-id="${row.id}">Edit</button></td>
+        `;
+
+        tr.querySelector('button').addEventListener('click', () => openEditor(row));
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function loadRows() {
+      clearStatus('tableStatus');
+      const res = await fetch('/admin/children');
+      const data = await res.json();
+      if (!res.ok) {
+        showStatus('tableStatus', data.error || 'Could not load rows.', false);
+        throw new Error(data.error || 'Unauthorized');
+      }
+      renderRows(data);
+      showStatus('tableStatus', `Loaded ${data.length} rows.`, true);
+    }
+
+    function openEditor(row) {
+      clearStatus('editStatus');
+      document.getElementById('editCard').classList.remove('hidden');
+      document.getElementById('editId').value = row.id;
+      document.getElementById('editName').value = row.child_name;
+      document.getElementById('editAge').value = row.age;
+      document.getElementById('editTown').value = row.town;
+      document.getElementById('editBirthdate').value = row.birthdate || '';
+      document.getElementById('editEmail').value = row.parent_email;
+      document.getElementById('editMessage').value = row.high_five_message || '';
+      document.getElementById('editPhoto').value = '';
+      document.getElementById('editRemovePhoto').checked = false;
+      document.getElementById('editName').focus();
+    }
+
+    async function saveEdit(event) {
+      event.preventDefault();
+      clearStatus('editStatus');
+
+      const photo = document.getElementById('editPhoto').files[0];
+      if (photo && (photo.size < PHOTO_MIN_BYTES || photo.size > PHOTO_MAX_BYTES)) {
+        showStatus('editStatus', 'Photo must be between 50 KB and 5 MB.', false);
+        return;
+      }
+
+      const id = document.getElementById('editId').value;
+      const form = new FormData(event.target);
+      form.append('remove_photo', document.getElementById('editRemovePhoto').checked ? 'true' : 'false');
+
+      const res = await fetch(`/admin/children/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: form
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showStatus('editStatus', data.error || 'Save failed.', false);
+        return;
+      }
+
+      showStatus('editStatus', 'Changes saved.', true);
+      try {
+        await loadRows();
+      } catch (_err) {
+        showStatus('editStatus', 'Saved, but failed to refresh list.', false);
+      }
+    }
+
+    document.getElementById('btnLogin').addEventListener('click', login);
+    document.getElementById('password').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') login();
+    });
+    document.getElementById('btnLogout').addEventListener('click', logout);
+    document.getElementById('btnRefresh').addEventListener('click', loadRows);
+    document.getElementById('editForm').addEventListener('submit', saveEdit);
+    document.getElementById('btnCancelEdit').addEventListener('click', () => {
+      document.getElementById('editCard').classList.add('hidden');
+    });
+
+    // Probe auth status quickly.
+    loadRows().then(() => {
+      document.getElementById('loginCard').classList.add('hidden');
+      document.getElementById('adminCard').classList.remove('hidden');
+    }).catch(() => {
+      document.getElementById('loginCard').classList.remove('hidden');
+      document.getElementById('adminCard').classList.add('hidden');
+    });
+  </script>
+</body>
+</html>
