@@ -229,9 +229,8 @@ test('POST /submit rejects submission made less than 6 weeks before birthdate', 
   assert.ok(json.error.includes('submission date'));
 });
 
-test('POST /submit rejects birth year too far from current or early-next-year window', async () => {
-  const currentYear = new Date().getUTCFullYear();
-  const disallowedBirthdate = `${currentYear + 1}-12-15`;
+test('POST /submit rejects birthday that is more than one year ahead', async () => {
+  const farBirthdate = isoDatePlusDays(370);
 
   const form = new FormData();
   form.append('child_name', 'Tara Bloom');
@@ -239,10 +238,10 @@ test('POST /submit rejects birth year too far from current or early-next-year wi
   form.append('town', 'Montreal');
   form.append('parent_email', 'tara@example.com');
   form.append('parent_email_confirm', 'tara@example.com');
-  form.append('birthdate', disallowedBirthdate);
+  form.append('birthdate', farBirthdate);
 
   const res = await fetch(`${BASE}/submit`, { method: 'POST', body: form });
   assert.equal(res.status, 400);
   const json = await res.json();
-  assert.ok(json.error.includes('Birthdate year'));
+  assert.ok(json.error.includes('between 6 weeks and 1 year'));
 });

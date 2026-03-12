@@ -159,8 +159,7 @@
       <div class="field">
         <label for="submission_date">Submission Date (auto-set)</label>
         <input type="date" id="submission_date" name="submission_date" readonly />
-        <p class="hint">Applications must be submitted at least 6 weeks before the child's birthdate.</p>
-        <p class="hint">Birth year must match the current year, unless the birthdate is within 6 weeks of next year.</p>
+        <p class="hint">The child's birthday (month/day, year ignored) must be between 6 weeks and 1 year ahead of the submission date.</p>
       </div>
 
       <div class="field">
@@ -212,30 +211,33 @@
         .join(' ');
     }
 
-    function isSubmissionAtLeastSixWeeksBeforeBirth(submissionDate, birthdate) {
+    function getNextBirthdayOccurrence(submissionDate, birthdate) {
       const submitted = new Date(`${submissionDate}T00:00:00Z`);
-      const birth = new Date(`${birthdate}T00:00:00Z`);
-      if (Number.isNaN(birth.getTime()) || Number.isNaN(submitted.getTime())) return false;
-      const sixWeeksMs = 6 * 7 * 24 * 60 * 60 * 1000;
-      return (birth.getTime() - submitted.getTime()) >= sixWeeksMs;
+      if (Number.isNaN(submitted.getTime())) return null;
+
+      const parts = birthdate.split('-');
+      if (parts.length !== 3) return null;
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      let next = new Date(Date.UTC(submitted.getUTCFullYear(), month - 1, day));
+      if (next <= submitted) {
+        next = new Date(Date.UTC(submitted.getUTCFullYear() + 1, month - 1, day));
+      }
+      return next;
     }
 
-    function isBirthYearAllowed(submissionDate, birthdate) {
+    function isBirthdayWindowAllowed(submissionDate, birthdate) {
       const submitted = new Date(`${submissionDate}T00:00:00Z`);
-      const birth = new Date(`${birthdate}T00:00:00Z`);
-      if (Number.isNaN(submitted.getTime()) || Number.isNaN(birth.getTime())) return false;
+      const nextBirthday = getNextBirthdayOccurrence(submissionDate, birthdate);
+      if (Number.isNaN(submitted.getTime()) || !nextBirthday || Number.isNaN(nextBirthday.getTime())) return false;
 
-      const submittedYear = submitted.getUTCFullYear();
-      const birthYear = birth.getUTCFullYear();
-      if (birthYear === submittedYear) return true;
+      const earliest = new Date(submitted);
+      earliest.setUTCDate(earliest.getUTCDate() + 42);
 
-      if (birthYear === submittedYear + 1) {
-        const nextYearStart = Date.UTC(submittedYear + 1, 0, 1);
-        const sixWeeksMs = 6 * 7 * 24 * 60 * 60 * 1000;
-        return (birth.getTime() - nextYearStart) <= sixWeeksMs;
-      }
+      const latest = new Date(submitted);
+      latest.setUTCFullYear(latest.getUTCFullYear() + 1);
 
-      return false;
+      return nextBirthday >= earliest && nextBirthday <= latest;
     }
 
     function todayISO() {
@@ -304,15 +306,8 @@
         return;
       }
 
-      if (!isSubmissionAtLeastSixWeeksBeforeBirth(submissionDateInput.value, birthdateInput.value)) {
-        status.textContent = '❌ Application denied: submission date must be at least 6 weeks before the birthdate.';
-        status.className = 'error';
-        status.style.display = 'block';
-        return;
-      }
-
-      if (!isBirthYearAllowed(submissionDateInput.value, birthdateInput.value)) {
-        status.textContent = '❌ Birthdate year must match the current year, unless birthdate is within 6 weeks of next year.';
+      if (!isBirthdayWindowAllowed(submissionDateInput.value, birthdateInput.value)) {
+        status.textContent = '❌ Application denied: birthday (month/day) must be between 6 weeks and 1 year ahead of submission date.';
         status.className = 'error';
         status.style.display = 'block';
         return;

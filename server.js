@@ -16,7 +16,6 @@ const ADMIN_COOKIE = 'cbc_admin_session';
 const PHOTO_MIN_BYTES = 50 * 1024;
 const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 const MIN_WEEKS_BEFORE_BIRTH_FOR_SUBMISSION = 6;
-const SIX_WEEKS_MS = 6 * 7 * 24 * 60 * 60 * 1000;
 
 // ── Static files & body parsing ──────────────────────────────────────────────
 app.use(express.urlencoded({ extended: true }));
@@ -113,38 +112,34 @@ function cleanupUploadedFile(file) {
   }
 }
 
-function parseISODateToUTC(value) {
-  return new Date(`${value}T00:00:00Z`);
+function toUTCDateOnly(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-function isSubmissionAtLeastSixWeeksBeforeBirth(birthdate, submissionDate = new Date()) {
-  const birth = parseISODateToUTC(birthdate);
-  if (Number.isNaN(birth.getTime())) {
-    return false;
+function getNextBirthdayOccurrence(birthdate, submissionDate = new Date()) {
+  const [, m, d] = birthdate.split('-');
+  const month = parseInt(m, 10);
+  const day = parseInt(d, 10);
+  const submitDay = toUTCDateOnly(submissionDate);
+
+  let candidate = new Date(Date.UTC(submitDay.getUTCFullYear(), month - 1, day));
+  if (candidate <= submitDay) {
+    candidate = new Date(Date.UTC(submitDay.getUTCFullYear() + 1, month - 1, day));
   }
-  const minMs = MIN_WEEKS_BEFORE_BIRTH_FOR_SUBMISSION * 7 * 24 * 60 * 60 * 1000;
-  return (birth.getTime() - submissionDate.getTime()) >= minMs;
+  return candidate;
 }
 
-function isBirthYearAllowedForSubmission(birthdate, now = new Date()) {
-  const birth = parseISODateToUTC(birthdate);
-  if (Number.isNaN(birth.getTime())) {
-    return false;
-  }
+function isBirthdayWindowAllowedForSubmission(birthdate, submissionDate = new Date()) {
+  const submitDay = toUTCDateOnly(submissionDate);
+  const nextBirthday = getNextBirthdayOccurrence(birthdate, submissionDate);
 
-  const currentYear = now.getUTCFullYear();
-  const birthYear = birth.getUTCFullYear();
+  const earliest = new Date(submitDay);
+  earliest.setUTCDate(earliest.getUTCDate() + (MIN_WEEKS_BEFORE_BIRTH_FOR_SUBMISSION * 7));
 
-  if (birthYear === currentYear) {
-    return true;
-  }
+  const latest = new Date(submitDay);
+  latest.setUTCFullYear(latest.getUTCFullYear() + 1);
 
-  if (birthYear === currentYear + 1) {
-    const nextYearStart = Date.UTC(currentYear + 1, 0, 1);
-    return (birth.getTime() - nextYearStart) <= SIX_WEEKS_MS;
-  }
-
-  return false;
+  return nextBirthday >= earliest && nextBirthday <= latest;
 }
 
 function requireAdmin(req, res, next) {
@@ -238,14 +233,9 @@ app.post('/submit', submitLimiter, upload.single('photo'), (req, res) => {
     return res.status(400).json({ error: 'Birthdate must be a valid date in YYYY-MM-DD format.' });
   }
 
-  if (!isBirthYearAllowedForSubmission(birthdate)) {
+  if (!isBirthdayWindowAllowedForSubmission(birthdate)) {
     cleanupUploadedFile(req.file);
-    return res.status(400).json({ error: 'Birthdate year must match the current year, unless birthdate is within 6 weeks of next year.' });
-  }
-
-  if (!isSubmissionAtLeastSixWeeksBeforeBirth(birthdate)) {
-    cleanupUploadedFile(req.file);
-    return res.status(400).json({ error: 'Application denied: submission date must be at least 6 weeks before the birthdate.' });
+    return res.status(400).json({ error: 'Application denied: birthday (month/day) must be between 6 weeks and 1 year ahead of submission date.' });
   }
 
   if (req.file && req.file.size < PHOTO_MIN_BYTES) {
